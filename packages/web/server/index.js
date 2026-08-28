@@ -76,6 +76,7 @@ import { configureOpenCodeRuntimeProviders, resetOpenCodeRuntimeProviders } from
 import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
+import { applySmallModelOverrideToOpenCodeConfig } from './lib/small-model/config-injection.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
@@ -1162,8 +1163,8 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     return [...new Set(directories)];
   },
   // A managed restart can move OpenCode to a NEW port (the old one may stay
-  // occupied by an orphaned process, e.g. killProcessOnPort is a no-op on
-  // Windows). Rebind the message-stream upstream readers to the current port
+  // occupied if killProcessOnPort/waitForPortRelease didn't free it in time,
+  // on any platform). Rebind the message-stream upstream readers to the current port
   // so the UI keeps receiving events instead of staying pinned to the old
   // process (#2638). The runtime is created later by the startup pipeline;
   // by the time any restart runs, it is assigned.
@@ -1204,11 +1205,25 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     const managedEnv = includeControl || includeWeb || includeMemory
       ? await (agentToolRuntime?.prepareManagedOpenCodeEnv({ includeControl, includeWeb, includeMemory }) || {})
       : {};
-    if (settings?.optimizeSystemPrompt !== true) return managedEnv;
+    const envWithSystemPrompt = settings?.optimizeSystemPrompt === true
+      ? {
+          ...managedEnv,
+          ...(await systemPromptRuntime.prepareManagedOpenCodeEnv(
+            managedEnv.OPENCODE_CONFIG_CONTENT ?? process.env.OPENCODE_CONFIG_CONTENT,
+          )),
+        }
+      : managedEnv;
 
-    const configContent = managedEnv.OPENCODE_CONFIG_CONTENT ?? process.env.OPENCODE_CONFIG_CONTENT;
-    const systemPromptEnv = await systemPromptRuntime.prepareManagedOpenCodeEnv(configContent);
-    return { ...managedEnv, ...systemPromptEnv };
+    // Apply the explicit Small Model override to the managed OpenCode config
+    // so OpenCode's own title/summary generation uses the user's chosen model.
+    const configContent = envWithSystemPrompt.OPENCODE_CONFIG_CONTENT ?? process.env.OPENCODE_CONFIG_CONTENT;
+    const withSmallModel = applySmallModelOverrideToOpenCodeConfig({
+      configContent,
+      smallModelUseDefault: settings?.smallModelUseDefault,
+      smallModelOverride: settings?.smallModelOverride,
+    });
+    if (withSmallModel === configContent) return envWithSystemPrompt;
+    return { ...envWithSystemPrompt, OPENCODE_CONFIG_CONTENT: withSmallModel };
   },
 });
 

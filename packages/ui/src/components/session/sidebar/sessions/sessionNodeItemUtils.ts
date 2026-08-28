@@ -1,6 +1,7 @@
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { normalizePath } from '@/lib/pathNormalization';
+import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
 import type { SessionNode } from '../types';
@@ -77,6 +78,31 @@ export type QuestionBadgeSessionScope = {
   directory: string;
   sessionIDs: string[];
 };
+
+export const canShowSessionWorktreeMenu = ({
+  isSubtaskSession,
+  archivedBucket,
+  isVSCode,
+  sessionDirectory,
+}: {
+  isSubtaskSession: boolean;
+  archivedBucket: boolean;
+  isVSCode: boolean;
+  sessionDirectory: string | null;
+}): boolean => !isSubtaskSession
+  && !archivedBucket
+  && !isVSCode
+  && !isChatDirectoryPath(sessionDirectory);
+
+export const getSessionWorktreeMenuDisabled = ({
+  sessionDirectory,
+  isStreaming,
+  isMovingToWorktree,
+}: {
+  sessionDirectory: string | null;
+  isStreaming: boolean;
+  isMovingToWorktree: boolean;
+}): boolean => !sessionDirectory || isStreaming || isMovingToWorktree;
 
 /**
  * Choose which (directory, sessionIDs) scopes a sidebar row's pending-question
@@ -305,6 +331,25 @@ export const nodeHasPinnedMembershipChange = (
   };
 
   return visit(prevNode, nextNode);
+};
+
+/**
+ * Visibility classes for the row's right-edge badges (pending permissions /
+ * questions). The hover actions paint over the row's right edge, and they are
+ * also forced visible while the row menu is open — without hover, so the
+ * hover reveal padding does not apply and the actions would cover the badges.
+ * The badges therefore yield exactly like the date/branch metadata label:
+ * hidden while the actions are hover-revealed or the menu is open. Rows with
+ * always-visible actions reserve permanent padding instead, so their badges
+ * never conflict and must stay visible.
+ */
+export const selectRowBadgeVisibilityClass = (input: {
+  actionsAlwaysVisible: boolean;
+  menuOpen: boolean;
+  hideOnHoverClass: string;
+}): string => {
+  if (input.actionsAlwaysVisible) return '';
+  return `transition-opacity duration-150 ${input.menuOpen ? 'opacity-0' : input.hideOnHoverClass}`;
 };
 
 /**
