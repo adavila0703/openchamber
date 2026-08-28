@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Right-click an editor, chat, or browser tab in the context panel to close it, close others, close left/right, or close all (thanks to @adavila0703).
+
 ## [1.21.0] - 2026-08-26
 
 - **Chat context attachments:** diff and file comments, terminal selections, and linked issues/PRs now show in the conversation as compact context cards — source header, captured content behind an expander, your comment below — instead of raw text inside the message.
